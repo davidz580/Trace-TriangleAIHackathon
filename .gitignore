@@ -25,3 +25,5 @@ supabase/.temp/
 coverage/
 *.tsbuildinfo
 npm-debug.log*
+
+/data/private-input/
