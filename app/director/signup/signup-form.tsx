@@ -51,7 +51,7 @@ export default function SignUpForm() {
             <UserPlus className="h-6 w-6 text-accent" />
           </div>
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">Create your account</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Get started with Noteworthe for your nonprofit.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Get started with Trace for your nonprofit.</p>
         </div>
 
         <Card>

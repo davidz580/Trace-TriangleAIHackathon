@@ -55,7 +55,7 @@ export function Sidebar() {
       >
         <div className="flex h-16 items-center px-6">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold tracking-tight text-foreground">Noteworthe</span>
+            <span className="text-xl font-bold tracking-tight text-foreground">Trace</span>
           </Link>
         </div>
 
@@ -94,7 +94,7 @@ export function Sidebar() {
             </button>
           </form>
           <p className="text-xs text-muted-foreground">
-            Noteworthe — We handle the proof; you handle the impact.
+            Trace — We handle the proof; you handle the impact.
           </p>
         </div>
       </aside>

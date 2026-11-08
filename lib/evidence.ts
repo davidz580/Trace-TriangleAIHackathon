@@ -76,7 +76,7 @@ export async function gatherOrganizationEvidence(
     .select("id, date, participant_encounters, minutes_performed, format, host_site_id")
     .eq("organization_id", organizationId)
     .order("date", { ascending: false })
-    .limit(100);
+    .limit(15);
 
   const reflectionRows =
     reflections?.map((r) => ({
@@ -92,26 +92,26 @@ export async function gatherOrganizationEvidence(
     .from("director_inputs")
     .select("category, prompt_text, response_text")
     .eq("organization_id", organizationId)
-    .limit(50);
+    .limit(10);
 
   const { data: historicalSources } = await supabase
     .from("historical_sources")
     .select("title, content_excerpt")
     .eq("organization_id", organizationId)
-    .limit(50);
+    .limit(10);
 
   const { data: quoteRecords } = await supabase
     .from("quote_records")
     .select("id, text, speaker, consent_status")
     .eq("organization_id", organizationId)
-    .limit(100);
+    .limit(8);
 
   // Build evidence_items as qualitative + quantitative
   const { data: evidenceItems } = await supabase
     .from("evidence_items")
     .select("id, source_volunteer_reflection_id, source_historical_source_id, source_director_input_id, excerpt, claim_type, tags, verification_status, created_at")
     .eq("organization_id", organizationId)
-    .limit(200);
+    .limit(20);
 
   const qualitative: QualitativeEvidence[] = [];
   const quantitative: QuantitativeEvidence[] = [];

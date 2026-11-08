@@ -27,3 +27,4 @@ coverage/
 npm-debug.log*
 
 /data/private-input/
+.vercel
