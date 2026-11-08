@@ -57,7 +57,6 @@ export async function callTinker<T>({
         ...(systemParts.length > 0 ? { system: systemParts.join("\n") } : {}),
         messages: apiMessages,
         max_tokens: 8192,
-        thinking: { type: "disabled" },
       }),
     });
 
@@ -70,12 +69,11 @@ export async function callTinker<T>({
 
     const data = await response.json();
 
-    // Support both Anthropic format (data.content[]) and OpenAI format (data.choices[])
     let rawContent = "";
     let finishReason = data.stop_reason ?? data.choices?.[0]?.finish_reason ?? "unknown";
 
     if (Array.isArray(data.content)) {
-      // Anthropic format
+      // Anthropic / Tinker multi-block format: text blocks first, then thinking fallback
       const textBlocks = data.content.filter(
         (b: unknown) => (b as { type?: string })?.type === "text"
       );
@@ -83,18 +81,37 @@ export async function callTinker<T>({
         .map((b: unknown) => (b as { text: string }).text)
         .filter((t: string) => t.length > 0)
         .join("");
+
+      // If no text blocks, try thinking / reasoning blocks
+      if (!rawContent) {
+        const thinkBlocks = data.content.filter(
+          (b: unknown) =>
+            (b as { type?: string })?.type === "thinking" ||
+            (b as { type?: string })?.type === "reasoning"
+        );
+        rawContent = thinkBlocks
+          .map((b: unknown) =>
+            ((b as { thinking?: string }).thinking) ??
+            ((b as { text?: string }).text) ??
+            ""
+          )
+          .filter((t: string) => t.length > 0)
+          .join("");
+      }
     } else if (data.choices?.[0]?.message?.content) {
-      // OpenAI format fallback
       rawContent = data.choices[0].message.content;
     } else if (typeof data.text === "string") {
       rawContent = data.text;
     }
 
+    // Strip Kimi/DeepSeek <think> wrappers if present
+    const cleanedContent = rawContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
     console.log(
-      `[tinker] attempt=${attempt + 1}/${maxRetries + 1} request_id=${data.id ?? "unknown"} finish_reason=${finishReason} input_tokens=${data.usage?.input_tokens ?? data.usage?.prompt_tokens ?? "unknown"} output_tokens=${data.usage?.output_tokens ?? data.usage?.completion_tokens ?? "unknown"} content_length=${rawContent.length}`
+      `[tinker] attempt=${attempt + 1}/${maxRetries + 1} request_id=${data.id ?? "unknown"} finish_reason=${finishReason} input_tokens=${data.usage?.input_tokens ?? data.usage?.prompt_tokens ?? "unknown"} output_tokens=${data.usage?.output_tokens ?? data.usage?.completion_tokens ?? "unknown"} raw_length=${rawContent.length} cleaned_length=${cleanedContent.length}`
     );
 
-    const content = rawContent;
+    const content = cleanedContent || rawContent;
 
     if (!content) {
       lastError = new Error("Empty response from Tinker");
