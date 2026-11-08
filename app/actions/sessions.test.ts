@@ -83,33 +83,16 @@ describe("createSession", () => {
     });
   });
 
-  it("still creates a session when no active form version exists", async () => {
+  it("rejects session creation when no active form version exists", async () => {
     formVersionsSingleResult = { data: null, error: { code: "PGRST116" } };
-    sessionsSingleResult = {
-      data: {
-        id: "session-uuid",
-        organization_id: "org-uuid",
-        date: "2025-01-15",
-        title: "Test Session",
-        form_version_id: null,
-      },
-      error: null,
-    };
 
     const result = await createSession("org-uuid", {
       date: "2025-01-15",
       title: "Test Session",
     });
 
-    expect(result.error).toBeUndefined();
-    expect(result.session).toBeDefined();
-
-    expect(lastInsertPayload).toMatchObject({
-      organization_id: "org-uuid",
-      date: "2025-01-15",
-      title: "Test Session",
-      form_version_id: null,
-    });
+    expect(result.error).toContain("No published volunteer questionnaire");
+    expect(result.session).toBeUndefined();
   });
 
   it("rejects invalid date format", async () => {

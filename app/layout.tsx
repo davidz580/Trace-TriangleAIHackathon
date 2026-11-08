@@ -9,8 +9,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Trace",
-    template: "%s — Trace",
+    default: "Noteworthe",
+    template: "%s — Noteworthe",
   },
   description: "We handle the proof; you handle the impact.",
 };

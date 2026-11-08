@@ -131,21 +131,20 @@ export default function ReflectForm({
         ))}
 
         {/* Quote capture — always present as optional */}
-        <Field label="Optional quote from a resident, family member, or staff" helper="Please don't include names">
+        <Field label="Optional quote from a resident, family member, or staff" helper="Please don't include names. Then choose who spoke below.">
           <Textarea name="quoteText" placeholder="What did someone say that stood out?" rows={3} />
         </Field>
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium">Speaker</label>
+        <Field label="Who said the quote above?" helper="This helps us know who the quote came from.">
           <select
             name="quoteSpeaker"
             className="flex h-10 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="resident">Resident</option>
             <option value="family member">Family member</option>
-            <option value="staff">Staff</option>
+            <option value="staff">Staff member</option>
           </select>
-        </div>
+        </Field>
 
         {submitError && <p className="text-sm text-danger">{submitError}</p>}
 

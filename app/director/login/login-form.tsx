@@ -36,7 +36,7 @@ export default function LoginForm() {
             <LogIn className="h-6 w-6 text-accent" />
           </div>
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">Director Access</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Sign in to your Trace account.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Sign in to your Noteworthe account.</p>
         </div>
 
         <Card>

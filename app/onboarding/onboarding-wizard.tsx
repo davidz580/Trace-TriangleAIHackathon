@@ -30,7 +30,7 @@ export default function OnboardingWizard() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome to Trace</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome to Noteworthe</h1>
         <p className="text-muted-foreground">
           Set up your nonprofit to start collecting evidence for grants.
         </p>

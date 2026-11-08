@@ -57,7 +57,7 @@ export async function callTinker<T>({
         ...(systemParts.length > 0 ? { system: systemParts.join("\n") } : {}),
         messages: apiMessages,
         max_tokens: 4096,
-        thinking: { type: "disabled" },
+        reasoning_effort: false,
       }),
     });
 

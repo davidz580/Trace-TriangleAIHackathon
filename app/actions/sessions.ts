@@ -21,8 +21,7 @@ export async function createSession(
     return { error: parsed.error.issues.map((i) => i.message).join("; ") };
   }
 
-  // Defensively pin the active form version so sessions always have a
-  // questionnaire, even if the database trigger is not present.
+  // Verify a published questionnaire exists before creating a session.
   const { data: activeVersion } = await supabase
     .from("form_versions")
     .select("id")
@@ -31,11 +30,18 @@ export async function createSession(
     .limit(1)
     .single();
 
+  if (!activeVersion) {
+    return {
+      error:
+        "No published volunteer questionnaire found. Please publish your volunteer form in Onboarding before creating sessions.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("activity_sessions")
     .insert({
       organization_id: organizationId,
-      form_version_id: activeVersion?.id ?? null,
+      form_version_id: activeVersion.id,
       ...parsed.data,
     })
     .select()
@@ -43,6 +49,55 @@ export async function createSession(
 
   if (error) return { error: error.message };
   return { session: data };
+}
+
+export async function repairSessionFormVersion(organizationId: string, sessionId: string) {
+  const supabase = await createClient();
+
+  // Check if session has any reflections
+  const { count } = await supabase
+    .from("volunteer_reflections")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("session_id", sessionId);
+
+  if (count && count > 0) {
+    return { error: "Cannot repair: this session already has submissions." };
+  }
+
+  const { data: activeVersion } = await supabase
+    .from("form_versions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+
+  if (!activeVersion) {
+    return { error: "No published questionnaire found. Publish a volunteer form first." };
+  }
+
+  const { error } = await supabase
+    .from("activity_sessions")
+    .update({ form_version_id: activeVersion.id })
+    .eq("id", sessionId)
+    .eq("organization_id", organizationId);
+
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getActiveFormVersion(organizationId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("form_versions")
+    .select("id, version_number, published_at")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .single();
+
+  if (error) return { error: error.message };
+  return { version: data };
 }
 
 export async function listSessions(organizationId: string) {

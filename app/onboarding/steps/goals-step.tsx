@@ -157,7 +157,7 @@ export default function GoalsStep({ organizationId, onNext, onBack }: GoalsStepP
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Aggregation</label>
+            <label className="text-xs font-medium text-muted-foreground">How this total is calculated</label>
             <select
               value={newMetricAgg}
               onChange={(e) => setNewMetricAgg(e.target.value as typeof newMetricAgg)}

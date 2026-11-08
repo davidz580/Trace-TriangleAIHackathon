@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
-import { createSession } from "@/app/actions/sessions";
+import { createSession, repairSessionFormVersion, getActiveFormVersion } from "@/app/actions/sessions";
 import {
   createInvitationToken,
   listInvitationTokens,
@@ -16,7 +16,7 @@ import {
   generateQRCodeDataUrl,
 } from "@/app/actions/invitations";
 import { buildInvitationUrl } from "@/lib/invitation-url";
-import { CalendarDays, Calendar, Copy, Download, QrCode, Plus, X, Trash2 } from "lucide-react";
+import { CalendarDays, Calendar, Copy, Download, QrCode, Plus, X, Trash2, AlertTriangle, Wrench } from "lucide-react";
 
 interface SessionItem {
   id: string;
@@ -26,6 +26,7 @@ interface SessionItem {
   activity_categories: { name: string } | null;
   host_sites: { name: string } | null;
   reflection_count: number;
+  form_version_id: string | null;
 }
 
 interface Category {
@@ -45,6 +46,7 @@ interface SessionsClientProps {
   sessionsError?: string;
   categories: Category[];
   hostSites: HostSite[];
+  hasPublishedQuestionnaire: boolean;
 }
 
 export default function SessionsClient({
@@ -54,6 +56,7 @@ export default function SessionsClient({
   sessionsError,
   categories,
   hostSites,
+  hasPublishedQuestionnaire,
 }: SessionsClientProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -86,6 +89,8 @@ export default function SessionsClient({
     }
 
     if (result.session) {
+      // Fetch active form version for the new session
+      const active = await getActiveFormVersion(organizationId);
       setSessionList((prev) => [
         {
           ...result.session,
@@ -96,6 +101,7 @@ export default function SessionsClient({
             ? { name: hostSites.find((h) => h.id === result.session.host_site_id)!.name }
             : null,
           reflection_count: 0,
+          form_version_id: active.version?.id ?? null,
         },
         ...prev,
       ]);
@@ -110,12 +116,27 @@ export default function SessionsClient({
         description="Create and manage sessions. Share invitation links with volunteers."
       >
         {isDirector && (
-          <Button onClick={() => setShowCreate(!showCreate)}>
+          <Button onClick={() => setShowCreate(!showCreate)} disabled={!hasPublishedQuestionnaire}>
             <Plus className="h-4 w-4 mr-2" />
             New session
           </Button>
         )}
       </TopBar>
+
+      {!hasPublishedQuestionnaire && (
+        <Card className="border-warning">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3 text-sm text-warning">
+              <AlertTriangle className="h-4 w-4" />
+              <span>
+                <strong>No published questionnaire.</strong>{" "}
+                Volunteers cannot submit reflections until you{" "}
+                <a href="/onboarding" className="underline">publish questions in Onboarding</a>.
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {showCreate && (
         <Card>
@@ -131,7 +152,7 @@ export default function SessionsClient({
                 </div>
                 <div className="space-y-2">
                   <label className="block text-sm font-medium">Title</label>
-                  <Input name="title" placeholder="e.g., Spring Concert at Sunnyvale" />
+                  <Input name="title" placeholder="e.g., Community Garden Build Day" />
                 </div>
               </div>
 
@@ -194,7 +215,11 @@ export default function SessionsClient({
       {sessionList.length === 0 && !sessionsError && (
         <EmptyState
           title="No sessions yet"
-          description="Create your first activity session to start collecting volunteer reflections."
+          description={
+            hasPublishedQuestionnaire
+              ? "Create your first activity session to start collecting volunteer reflections."
+              : "Publish your volunteer questionnaire first, then create sessions here."
+          }
           icon={<CalendarDays className="h-6 w-6 text-accent" />}
         />
       )}
@@ -235,6 +260,10 @@ function SessionCard({
   const [showTokens, setShowTokens] = useState(false);
   const [creatingToken, setCreatingToken] = useState(false);
   const [tokenError, setTokenError] = useState("");
+  const [repairing, setRepairing] = useState(false);
+  const [repairMessage, setRepairMessage] = useState("");
+
+  const needsRepair = !session.form_version_id && session.reflection_count === 0;
 
   async function loadTokens() {
     setLoadingTokens(true);
@@ -280,6 +309,20 @@ function SessionCard({
     }
   }
 
+  async function handleRepair() {
+    setRepairing(true);
+    setRepairMessage("");
+    const result = await repairSessionFormVersion(organizationId, session.id);
+    setRepairing(false);
+    if (result.error) {
+      setRepairMessage(result.error);
+    } else {
+      setRepairMessage("Session repaired with active questionnaire.");
+      // Refresh page to reflect update
+      window.location.reload();
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -290,6 +333,9 @@ function SessionCard({
                 {session.title || "Untitled session"}
               </CardTitle>
               <Badge variant="secondary">{session.reflection_count} reflections</Badge>
+              {needsRepair && (
+                <Badge variant="danger">No questionnaire</Badge>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -320,6 +366,23 @@ function SessionCard({
             {showTokens ? "Close" : "Invitations"}
           </Button>
         </div>
+
+        {needsRepair && isDirector && (
+          <div className="mt-2 flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={handleRepair}
+              disabled={repairing}
+            >
+              <Wrench className="h-3.5 w-3.5 mr-1" />
+              {repairing ? "Repairing..." : "Assign active questionnaire"}
+            </Button>
+            {repairMessage && (
+              <span className="text-xs text-muted-foreground">{repairMessage}</span>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       {showTokens && (

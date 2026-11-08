@@ -3,6 +3,10 @@
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { redactAnswers, redactText } from "@/lib/redaction";
+import {
+  extractEvidenceFromReflection,
+  persistExtractedEvidence,
+} from "@/lib/evidence-extraction";
 
 const SubmitSchema = z.object({
   token: z.string().min(1),
@@ -175,9 +179,27 @@ export async function submitReflection(formData: FormData) {
     return { error: "Submission failed. Please try again." };
   }
 
+  const reflectionId = submitResult[0].reflection_id as string;
+
+  // 6. Extract evidence asynchronously (fire-and-forget — do not block volunteer response)
+  void extractEvidenceFromReflection(
+    tokenRow.organization_id,
+    reflectionId,
+    redacted.answers,
+    quoteJson?.text as string | undefined
+  )
+    .then(({ items, error: extractError }) => {
+      if (!extractError && items.length > 0) {
+        return persistExtractedEvidence(tokenRow.organization_id, reflectionId, items);
+      }
+    })
+    .catch((extractErr) => {
+      console.error("[submitReflection] evidence extraction failed:", extractErr);
+    });
+
   return {
     success: true,
-    reflectionId: submitResult[0].reflection_id as string,
+    reflectionId: reflectionId,
     isNew: submitResult[0].is_new as boolean,
     hasSensitiveContent: redacted.hasSensitiveContent,
   };

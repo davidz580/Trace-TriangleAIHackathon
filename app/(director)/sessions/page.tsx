@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { listSessionsWithReflectionCount } from "@/app/actions/sessions";
 import { listCategories, listHostSites } from "@/app/actions/programs";
@@ -8,7 +9,10 @@ export const metadata = {
   title: "Activity Sessions",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function SessionsPage() {
+  noStore();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -30,11 +34,14 @@ export default async function SessionsPage() {
   const organizationId = membership.organization_id;
   const isDirector = membership.role === "owner" || membership.role === "director";
 
-  const [sessionsResult, categoriesResult, hostSitesResult] = await Promise.all([
+  const [sessionsResult, categoriesResult, hostSitesResult, activeFormResult] = await Promise.all([
     listSessionsWithReflectionCount(organizationId),
     listCategories(organizationId),
     listHostSites(organizationId),
+    supabase.from("form_versions").select("id").eq("organization_id", organizationId).eq("is_active", true).limit(1).single(),
   ]);
+
+  const hasPublishedQuestionnaire = !activeFormResult.error && !!activeFormResult.data;
 
   return (
     <SessionsClient
@@ -44,6 +51,7 @@ export default async function SessionsPage() {
       sessionsError={sessionsResult.error}
       categories={categoriesResult.categories ?? []}
       hostSites={hostSitesResult.hostSites ?? []}
+      hasPublishedQuestionnaire={hasPublishedQuestionnaire}
     />
   );
 }

@@ -149,7 +149,7 @@ export default function BackgroundStep({ organizationId, onNext, onBack }: Backg
               type="file"
               accept=".txt,.pdf"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-medium file:text-accent-foreground hover:file:bg-accent-hover"
+              className="file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent-foreground hover:file:bg-accent-hover"
             />
           </div>
           <p className="text-xs text-muted-foreground">

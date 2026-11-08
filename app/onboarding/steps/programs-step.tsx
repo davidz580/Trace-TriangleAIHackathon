@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { addProgram, removeProgram, addCategory, removeCategory } from "@/app/actions/programs";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 interface ProgramsStepProps {
   organizationId: string;
@@ -106,7 +106,7 @@ export default function ProgramsStep({ organizationId, onNext, onBack }: Program
             rows={1}
           />
           <Button onClick={handleAddProgram} disabled={loading || !newProgramName.trim()} size="sm">
-            <Plus className="h-4 w-4" />
+            Add program
           </Button>
         </div>
       </div>
@@ -140,7 +140,7 @@ export default function ProgramsStep({ organizationId, onNext, onBack }: Program
             rows={1}
           />
           <Button onClick={handleAddCategory} disabled={loading || !newCategoryName.trim()} size="sm">
-            <Plus className="h-4 w-4" />
+            Add category
           </Button>
         </div>
       </div>

@@ -375,7 +375,7 @@ describe("callTinker", () => {
     expect(result.data).toEqual(payload);
   });
 
-  it("includes thinking: { type: 'disabled' } in the request body", async () => {
+  it("sends reasoning_effort as boolean false", async () => {
     fetchMock.mockResolvedValueOnce(
       anthropicResponse({
         text: JSON.stringify({ questions: [] }),
@@ -391,6 +391,30 @@ describe("callTinker", () => {
 
     const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
     const requestBody = JSON.parse(requestInit.body as string);
-    expect(requestBody.thinking).toEqual({ type: "disabled" });
+    expect(requestBody.reasoning_effort).toBe(false);
+  });
+
+  it("does not send a string-valued reasoning_effort or conflicting reasoning controls", async () => {
+    fetchMock.mockResolvedValueOnce(
+      anthropicResponse({
+        text: JSON.stringify({ questions: [] }),
+        stopReason: "end_turn",
+      })
+    );
+
+    await callTinker({
+      messages: [{ role: "user", content: "test" }],
+      schema: TestSchema,
+      maxRetries: 0,
+    });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const requestBody = JSON.parse(requestInit.body as string);
+    // The live Tinker gateway for Kimi K2.6 rejects string-valued reasoning_effort.
+    if (Object.prototype.hasOwnProperty.call(requestBody, "reasoning_effort")) {
+      expect(typeof requestBody.reasoning_effort).toBe("boolean");
+    }
+    // Do not send the Anthropic-style thinking control that conflicts with this model.
+    expect(requestBody).not.toHaveProperty("thinking");
   });
 });
