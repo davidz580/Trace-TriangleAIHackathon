@@ -134,7 +134,7 @@ export async function gatherOrganizationEvidence(
       source_type: sourceType,
       claim_type: item.claim_type,
       tags: item.tags,
-      excerpt: item.excerpt,
+      excerpt: String(item.excerpt ?? "").slice(0, 200),
       source_record_id: sourceId,
       organization_id: organizationId,
       created_at: item.created_at,
