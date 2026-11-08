@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -8,11 +10,27 @@ export const metadata = {
   title: "Dashboard",
 };
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/director/login");
+  }
+
+  const { data: membership } = await supabase
+    .from("organization_memberships")
+    .select("organization_id, organizations(id, name)")
+    .eq("user_id", user.id)
+    .limit(1)
+    .single();
+
+  const orgName = (membership?.organizations as unknown as { name: string })?.name ?? "Organization";
+
   return (
     <div className="space-y-8">
       <TopBar
-        title="Director Dashboard"
+        title={`${orgName} Dashboard`}
         description="Overview of program evidence and activity"
       />
 

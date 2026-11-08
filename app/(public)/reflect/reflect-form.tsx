@@ -8,55 +8,93 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { submitReflection } from "@/app/actions/reflect-submit";
 
-function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
-  return (
-    <label htmlFor={htmlFor} className="block text-sm font-medium text-foreground">
-      {children}
-    </label>
-  );
+interface QuestionOption {
+  value: string;
+  label: string;
 }
 
-function Helper({ children }: { children: React.ReactNode }) {
-  return <p className="mt-1 text-xs text-muted-foreground">{children}</p>;
-}
-
-function Field({ label, children, helper }: { label: string; children: React.ReactNode; helper?: string }) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
-      {helper && <Helper>{helper}</Helper>}
-    </div>
-  );
+interface Question {
+  id: string;
+  question_key: string;
+  question_text: string;
+  question_type: "text" | "number" | "rating" | "boolean" | "single_choice" | "multi_choice";
+  sort_order: number;
+  is_required: boolean;
+  options: QuestionOption[];
 }
 
 interface ReflectFormProps {
-  defaultDate: string;
+  token: string;
+  sessionTitle: string;
+  sessionDate: string;
+  hostSiteName: string | null;
+  categoryName: string | null;
+  questions: Question[];
 }
 
-export default function ReflectForm({ defaultDate }: ReflectFormProps) {
+export default function ReflectForm({
+  token,
+  sessionTitle,
+  sessionDate,
+  hostSiteName,
+  categoryName,
+  questions,
+}: ReflectFormProps) {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [sensitiveWarning, setSensitiveWarning] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
-    // Placeholder: no actual submission yet
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    setSubmitError("");
+    setSensitiveWarning(false);
+
+    const form = new FormData(e.currentTarget);
+    form.append("token", token);
+
+    const result = await submitReflection(form);
+
     setSubmitting(false);
-    setSubmitted(true);
+
+    if (result.error) {
+      setSubmitError(result.error);
+      return;
+    }
+
+    if (result.success) {
+      setSubmitted(true);
+      if (result.hasSensitiveContent) {
+        setSensitiveWarning(true);
+      }
+    }
   }
 
   if (submitted) {
     return (
-      <div className="pt-8">
+      <div className="space-y-6 pt-8">
         <EmptyState
           title="Thank you"
           description="Your reflection has been recorded. Program staff will review it and may follow up if needed."
           icon={<ShieldCheck className="h-6 w-6 text-accent" />}
         />
+        {sensitiveWarning && (
+          <Card className="border-warning">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                Content note
+              </CardTitle>
+              <CardDescription>
+                We detected and removed potential names or location details from your reflection to protect privacy. Please avoid including names, room numbers, or health information in future submissions.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
       </div>
     );
   }
@@ -64,9 +102,11 @@ export default function ReflectForm({ defaultDate }: ReflectFormProps) {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Volunteer Reflection</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{sessionTitle}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Share a few details about your visit. This helps us document impact for future grants.
+          {sessionDate}
+          {hostSiteName ? ` · ${hostSiteName}` : ""}
+          {categoryName ? ` · ${categoryName}` : ""}
         </p>
       </div>
 
@@ -85,100 +125,189 @@ export default function ReflectForm({ defaultDate }: ReflectFormProps) {
           <Input name="volunteerName" placeholder="Your name" autoComplete="name" />
         </Field>
 
-        {/* 1. Performance date */}
-        <Field label="Performance date">
-          <Input name="performanceDate" type="date" defaultValue={defaultDate} required />
+        {/* Standard activity metadata questions come first */}
+        {questions.map((q) => (
+          <DynamicQuestion key={q.id} question={q} />
+        ))}
+
+        {/* Quote capture — always present as optional */}
+        <Field label="Optional quote from a resident, family member, or staff" helper="Please don't include names">
+          <Textarea name="quoteText" placeholder="What did someone say that stood out?" rows={3} />
         </Field>
 
-        {/* 2. Host site */}
-        <Field label="Host site">
-          <Input name="hostSite" placeholder="e.g., Sunnyvale Senior Center" required />
-        </Field>
-
-        {/* 3. Performance format */}
-        <Field label="Performance format">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Speaker</label>
           <select
-            name="format"
-            required
+            name="quoteSpeaker"
             className="flex h-10 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="">Select a format</option>
-            <option value="solo">Solo</option>
-            <option value="small-group">Small group</option>
-            <option value="sing-along">Sing-along</option>
-            <option value="interactive">Interactive</option>
+            <option value="resident">Resident</option>
+            <option value="family member">Family member</option>
+            <option value="staff">Staff</option>
           </select>
-        </Field>
+        </div>
 
-        {/* 4. Approximate number of attendees */}
-        <Field label="Approximate number of attendees" helper="Count encounters, not unique individuals">
-          <Input name="attendees" type="number" min={0} placeholder="e.g., 15" required />
-        </Field>
-
-        {/* 5. Minutes performed */}
-        <Field label="Minutes performed">
-          <Input name="minutes" type="number" min={1} placeholder="e.g., 45" required />
-        </Field>
-
-        {/* 6. Audience engagement */}
-        <Field label="Audience engagement" helper="1 = mostly listening quietly, 5 = singing, clapping, or requesting songs">
-          <div className="flex items-center gap-3">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <label key={n} className="flex cursor-pointer flex-col items-center gap-1">
-                <input
-                  type="radio"
-                  name="engagement"
-                  value={n}
-                  required
-                  className="h-4 w-4 accent-accent"
-                />
-                <span className="text-xs text-muted-foreground">{n}</span>
-              </label>
-            ))}
-          </div>
-        </Field>
-
-        {/* 7. How the performance went for you */}
-        <Field label="How did the performance go for you?" helper="1 = very difficult, 5 = very rewarding">
-          <div className="flex items-center gap-3">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <label key={n} className="flex cursor-pointer flex-col items-center gap-1">
-                <input
-                  type="radio"
-                  name="volunteerExperience"
-                  value={n}
-                  required
-                  className="h-4 w-4 accent-accent"
-                />
-                <span className="text-xs text-muted-foreground">{n}</span>
-              </label>
-            ))}
-          </div>
-        </Field>
-
-        {/* 8. One standout moment */}
-        <Field label="One standout moment">
-          <Textarea name="standoutMoment" placeholder="What moment stood out to you?" rows={3} required />
-        </Field>
-
-        {/* 9. What would make the next visit better? */}
-        <Field label="What would make the next visit better?">
-          <Textarea name="improvement" placeholder="Any suggestions or observations?" rows={3} required />
-        </Field>
-
-        {/* 10. Custom question */}
-        <Field label="Which songs did you play?" helper="Optional custom question">
-          <Textarea name="customAnswer" placeholder="List any songs you performed" rows={2} />
-        </Field>
+        {submitError && <p className="text-sm text-danger">{submitError}</p>}
 
         <div className="flex items-center gap-3 pt-2">
           <Button type="submit" size="lg" disabled={submitting}>
             {submitting && <Spinner size="sm" className="mr-2" />}
             Submit reflection
           </Button>
-          <Badge variant="outline">10 of 10 questions</Badge>
+          <Badge variant="outline">
+            {questions.filter((q) => q.is_required).length} required
+          </Badge>
         </div>
       </form>
     </div>
   );
+}
+
+function Field({
+  label,
+  children,
+  helper,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  helper?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-foreground">
+        {label}
+        {required && <span className="text-danger ml-1">*</span>}
+      </label>
+      {children}
+      {helper && <p className="text-xs text-muted-foreground">{helper}</p>}
+    </div>
+  );
+}
+
+function DynamicQuestion({ question }: { question: Question }) {
+  const name = `answer_${question.question_key}`;
+
+  switch (question.question_type) {
+    case "text":
+      return (
+        <Field label={question.question_text} required={question.is_required}>
+          <Textarea
+            name={name}
+            placeholder="Your answer..."
+            rows={3}
+            required={question.is_required}
+          />
+        </Field>
+      );
+
+    case "number":
+      return (
+        <Field label={question.question_text} required={question.is_required}>
+          <Input
+            name={name}
+            type="number"
+            placeholder="0"
+            required={question.is_required}
+          />
+        </Field>
+      );
+
+    case "rating":
+      return (
+        <Field
+          label={question.question_text}
+          helper="1 = lowest, 5 = highest"
+          required={question.is_required}
+        >
+          <div className="flex items-center gap-3">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <label key={n} className="flex cursor-pointer flex-col items-center gap-1">
+                <input
+                  type="radio"
+                  name={name}
+                  value={n}
+                  required={question.is_required}
+                  className="h-4 w-4 accent-accent"
+                />
+                <span className="text-xs text-muted-foreground">{n}</span>
+              </label>
+            ))}
+          </div>
+        </Field>
+      );
+
+    case "boolean":
+      return (
+        <Field label={question.question_text} required={question.is_required}>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name={name}
+                value="true"
+                required={question.is_required}
+                className="h-4 w-4 accent-accent"
+              />
+              Yes
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name={name}
+                value="false"
+                required={question.is_required}
+                className="h-4 w-4 accent-accent"
+              />
+              No
+            </label>
+          </div>
+        </Field>
+      );
+
+    case "single_choice":
+      return (
+        <Field label={question.question_text} required={question.is_required}>
+          <select
+            name={name}
+            required={question.is_required}
+            className="flex h-10 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">Select an option</option>
+            {question.options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      );
+
+    case "multi_choice":
+      return (
+        <Field label={question.question_text} required={question.is_required}>
+          <div className="space-y-2">
+            {question.options.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name={name}
+                  value={opt.value}
+                  className="h-4 w-4 accent-accent"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </Field>
+      );
+
+    default:
+      return (
+        <Field label={question.question_text} required={question.is_required}>
+          <Input name={name} placeholder="Your answer..." required={question.is_required} />
+        </Field>
+      );
+  }
 }

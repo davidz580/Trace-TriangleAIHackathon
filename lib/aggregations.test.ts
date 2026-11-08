@@ -1,30 +1,29 @@
-import { describe, it } from "node:test";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import { medianRounded, aggregateConcertEncounters, type ConcertReport } from "./aggregations.ts";
 
 describe("medianRounded", () => {
   it("returns the middle value for an odd number of elements", () => {
-    assert.strictEqual(medianRounded([10, 30, 20]), 20);
+    expect(medianRounded([10, 30, 20])).toBe(20);
   });
 
   it("averages and rounds .5 upward for an even number of elements", () => {
-    assert.strictEqual(medianRounded([20, 30]), 25);
+    expect(medianRounded([20, 30])).toBe(25);
   });
 
   it("rounds .5 upward (24 + 25) / 2 = 24.5 -> 25", () => {
-    assert.strictEqual(medianRounded([24, 25]), 25);
+    expect(medianRounded([24, 25])).toBe(25);
   });
 
   it("rounds .5 upward (25 + 26) / 2 = 25.5 -> 26", () => {
-    assert.strictEqual(medianRounded([25, 26]), 26);
+    expect(medianRounded([25, 26])).toBe(26);
   });
 
   it("handles a single element", () => {
-    assert.strictEqual(medianRounded([42]), 42);
+    expect(medianRounded([42])).toBe(42);
   });
 
   it("returns null for an empty array", () => {
-    assert.strictEqual(medianRounded([]), null);
+    expect(medianRounded([])).toBeNull();
   });
 });
 
@@ -41,7 +40,7 @@ describe("aggregateConcertEncounters", () => {
       { session_id: "concert-c", participant_encounters: 9 },
       { session_id: "concert-c", participant_encounters: 11 },
     ];
-    assert.strictEqual(aggregateConcertEncounters(reports), 44);
+    expect(aggregateConcertEncounters(reports)).toBe(44);
   });
 
   it("ignores reports with missing participant_encounters", () => {
@@ -50,11 +49,11 @@ describe("aggregateConcertEncounters", () => {
       { session_id: "concert-a", participant_encounters: NaN as unknown as number },
       { session_id: "concert-a", participant_encounters: 30 },
     ];
-    assert.strictEqual(aggregateConcertEncounters(reports as ConcertReport[]), 20);
+    expect(aggregateConcertEncounters(reports as ConcertReport[])).toBe(20);
   });
 
   it("returns 0 when there are no valid reports", () => {
-    assert.strictEqual(aggregateConcertEncounters([]), 0);
+    expect(aggregateConcertEncounters([])).toBe(0);
   });
 
   it("rounds each concert individually, which can differ from rounding the combined total", () => {
@@ -68,6 +67,6 @@ describe("aggregateConcertEncounters", () => {
       { session_id: "concert-b", participant_encounters: 1 },
       { session_id: "concert-b", participant_encounters: 2 },
     ];
-    assert.strictEqual(aggregateConcertEncounters(reports), 4);
+    expect(aggregateConcertEncounters(reports)).toBe(4);
   });
 });
