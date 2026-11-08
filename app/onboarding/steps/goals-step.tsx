@@ -177,8 +177,9 @@ export default function GoalsStep({ organizationId, onNext, onBack }: GoalsStepP
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Examples: <span className="font-medium text-foreground">Volunteer hours</span> — hours,{" "}
-          <span className="font-medium text-foreground">Performances delivered</span> — performances,{" "}
+          Examples:{" "}
+          <span className="font-medium text-foreground">Volunteer hours</span> — hours,{" "}
+          <span className="font-medium text-foreground">Activities delivered</span> — activities,{" "}
           <span className="font-medium text-foreground">Participant encounters</span> — encounters
         </p>
       </div>

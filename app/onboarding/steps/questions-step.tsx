@@ -206,7 +206,7 @@ export default function QuestionsStep({ organizationId }: QuestionsStepProps) {
       {loading && (
         <div className="flex flex-col items-center justify-center py-12 space-y-3">
           <Spinner size="lg" />
-          <p className="text-sm text-muted-foreground">Trace is tailoring questions to your organization&apos;s profile...</p>
+          <p className="text-sm text-muted-foreground">Generating your volunteer questions. This may take a few minutes.</p>
         </div>
       )}
 

@@ -4,7 +4,7 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Users, Music, TrendingUp } from "lucide-react";
+import { Calendar, Users, Heart, TrendingUp } from "lucide-react";
 
 export const metadata = {
   title: "Dashboard",
@@ -52,9 +52,9 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Performances
+              Activities
             </CardTitle>
-            <Music className="h-4 w-4 text-muted-foreground" />
+            <Heart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">—</div>
@@ -105,7 +105,7 @@ export default async function DashboardPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <TrendingUp className="h-10 w-10 text-muted-foreground/50" />
             <p className="mt-4 text-sm text-muted-foreground">
-              Chart will be available once performance data is collected.
+              Chart will be available once activity data is collected.
             </p>
             <Badge variant="secondary" className="mt-2">Pending data</Badge>
           </CardContent>

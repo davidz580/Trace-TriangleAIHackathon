@@ -250,4 +250,147 @@ describe("callTinker", () => {
 
     expect(result.data).toEqual(payload);
   });
+
+  it("concatenates multiple text blocks into a single payload", async () => {
+    const payload = {
+      questions: [{ question_key: "q1", question_text: "Hello?", question_type: "text" }],
+    };
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          content: [
+            { type: "text", text: '{"questions":[' },
+            { type: "text", text: '{"question_key":"q1","question_text":"Hello?","question_type":"text"}]}' },
+          ],
+          model: "test-model",
+          stop_reason: "end_turn",
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await callTinker({
+      messages: [{ role: "user", content: "test" }],
+      schema: TestSchema,
+      maxRetries: 0,
+    });
+
+    expect(result.data).toEqual(payload);
+  });
+
+  it("throws Empty response from Tinker when the response contains only thinking blocks", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          content: [{ type: "thinking", thinking: "some reasoning...", signature: "" }],
+          model: "test-model",
+          stop_reason: "end_turn",
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      callTinker({
+        messages: [{ role: "user", content: "test" }],
+        schema: TestSchema,
+        maxRetries: 0,
+      })
+    ).rejects.toThrow(/Empty response from Tinker/);
+  });
+
+  it("throws Empty response from Tinker when there are no content blocks", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          content: [],
+          model: "test-model",
+          stop_reason: "end_turn",
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      callTinker({
+        messages: [{ role: "user", content: "test" }],
+        schema: TestSchema,
+        maxRetries: 0,
+      })
+    ).rejects.toThrow(/Empty response from Tinker/);
+  });
+
+  it("throws Empty response from Tinker when the text block is empty", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          content: [{ type: "text", text: "" }],
+          model: "test-model",
+          stop_reason: "end_turn",
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      callTinker({
+        messages: [{ role: "user", content: "test" }],
+        schema: TestSchema,
+        maxRetries: 0,
+      })
+    ).rejects.toThrow(/Empty response from Tinker/);
+  });
+
+  it("parses markdown-fenced JSON correctly", async () => {
+    const payload = {
+      questions: [{ question_key: "q1", question_text: "Hello?", question_type: "text" }],
+    };
+
+    fetchMock.mockResolvedValueOnce(
+      anthropicResponse({
+        text: "```json\n" + JSON.stringify(payload) + "\n```",
+        stopReason: "end_turn",
+      })
+    );
+
+    const result = await callTinker({
+      messages: [{ role: "user", content: "test" }],
+      schema: TestSchema,
+      maxRetries: 0,
+    });
+
+    expect(result.data).toEqual(payload);
+  });
+
+  it("includes thinking: { type: 'disabled' } in the request body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      anthropicResponse({
+        text: JSON.stringify({ questions: [] }),
+        stopReason: "end_turn",
+      })
+    );
+
+    await callTinker({
+      messages: [{ role: "user", content: "test" }],
+      schema: TestSchema,
+      maxRetries: 0,
+    });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const requestBody = JSON.parse(requestInit.body as string);
+    expect(requestBody.thinking).toEqual({ type: "disabled" });
+  });
 });

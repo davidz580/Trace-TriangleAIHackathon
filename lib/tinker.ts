@@ -57,6 +57,7 @@ export async function callTinker<T>({
         ...(systemParts.length > 0 ? { system: systemParts.join("\n") } : {}),
         messages: apiMessages,
         max_tokens: 4096,
+        thinking: { type: "disabled" },
       }),
     });
 
@@ -68,8 +69,32 @@ export async function callTinker<T>({
     }
 
     const data = await response.json();
-    const textBlock = data.content?.find((b: unknown) => (b as { type?: string })?.type === "text");
-    const content = textBlock ? (textBlock as { text: string }).text : undefined;
+
+    // Diagnostics: log content block types, count, stop reason, token usage, request ID
+    const contentBlocks = Array.isArray(data.content) ? data.content : [];
+    const blockTypes = contentBlocks.map(
+      (b: unknown) => (b as { type?: string })?.type ?? "unknown"
+    );
+    const textBlocks = contentBlocks.filter(
+      (b: unknown) => (b as { type?: string })?.type === "text"
+    );
+    const hasTextBlock = textBlocks.length > 0;
+    const totalTextLength = textBlocks.reduce(
+      (sum: number, b: unknown) =>
+        sum + ((b as { text?: string })?.text ?? "").length,
+      0
+    );
+
+    console.log(
+      `[tinker] attempt=${attempt + 1}/${maxRetries + 1} request_id=${data.id ?? "unknown"} block_count=${contentBlocks.length} block_types=[${blockTypes.join(",")}] stop_reason=${data.stop_reason ?? "unknown"} input_tokens=${data.usage?.input_tokens ?? "unknown"} output_tokens=${data.usage?.output_tokens ?? "unknown"} has_text=${hasTextBlock} text_length=${totalTextLength}`
+    );
+
+    // Collect text from all text blocks
+    const content = textBlocks
+      .map((b: unknown) => (b as { text: string }).text)
+      .filter((t: string) => t.length > 0)
+      .join("");
+
     const finishReason = data.stop_reason;
 
     if (!content) {
