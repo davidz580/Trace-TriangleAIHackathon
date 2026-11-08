@@ -41,7 +41,7 @@
   - `/evidence` — Evidence library (filter badges, empty state)
   - `/grants` — Grant builder (demo disclaimer badge, empty state)
   - `/optimizer` — Form optimizer (active question counts, empty state)
-  - `/director/login` — Director passcode login placeholder
+  - `/director/login` — Director login via Supabase Auth placeholder
 - Created distinct layouts:
   - `(director)/layout.tsx` with sidebar navigation for director-only pages
   - `(public)/layout.tsx` with clean header/footer for volunteer pages
@@ -81,23 +81,45 @@
 
 ---
 
-## Phase 2: Database Schema Design and Migration Review
-**Status:** In Progress (blocked on Phase 2A review)
-**Completed Work:** (none)
+## Phase 2B: Database Architecture Design and Migration Review
+**Status:** Drafted and audited (Phase 2C corrections applied; awaiting explicit approval before remote migration)
+**Completed Work:**
+- Designed complete multi-tenant database schema with 29+ tables across 8 migration files.
+- Defined helper functions: `is_org_member`, `is_org_director`, `is_org_owner`, `trigger_set_updated_at`.
+- Wrote restrictive RLS policies for every table; no permissive `FOR ALL` policies.
+- Created `supabase/migrations/00001_trace_multitenant_core.sql` (organizations, user_profiles, memberships).
+- Created `supabase/migrations/00002_trace_org_config.sql` (programs, categories, host_sites, goals, metrics).
+- Created `supabase/migrations/00003_trace_sessions.sql` (activity_sessions, session_invitation_tokens).
+- Created `supabase/migrations/00004_trace_reflections.sql` (volunteer_identities, form_versions, organization_questions, question_options, volunteer_reflections, reflection_answers, quote_records).
+- Created `supabase/migrations/00005_trace_evidence.sql` (historical_sources, director_inputs, evidence_items).
+- Created `supabase/migrations/00006_trace_grants.sql` (grants, grant_requirements, grant_responses, grant_claims, evidence_citations).
+- Created `supabase/migrations/00007_trace_optimizer.sql` (question_presentation_events, form_optimizer_recommendations, form_optimizer_approval_history).
+- Created `supabase/migrations/00008_trace_import.sql` (import_batches, FK to volunteer_reflections).
+- Created `types/database.ts` with TypeScript interfaces matching the schema.
+- Updated `docs/ARCHITECTURE.md` with multi-tenant model, auth flow, question versioning, submission API, AI boundaries, concert aggregation, consent/provenance rules.
+- Updated `docs/DATA_CONTRACT_MAPPING.md`: resolved all 6 open decisions, added import batch provenance mapping, added form version snapshot mapping.
+- Updated `docs/DEPLOYMENT.md` with RLS testing and import idempotency verification steps.
+
+**Phase 2C Corrections Applied:**
+1. **Tenant-consistent composite foreign keys** — Added `UNIQUE (organization_id, id)` to every organization-scoped parent table and composite `FOREIGN KEY (organization_id, ...)` on all child tables that reference them (sessions, reflections, answers, quotes, evidence, grants, optimizer events, imports).
+2. **Removed public token-table access** — No SELECT policy allows `anon` or `authenticated` to read `session_invitation_tokens`. `lookup_token_by_value` and `submit_reflection` `EXECUTE` privileges revoked from `PUBLIC`, `anon`, and `authenticated`.
+3. **Dynamic questionnaire submission** — `submit_reflection` rewritten to accept a `jsonb` answers payload keyed to the active `form_version` instead of hardcoded NOTEWORTHE question parameters. Supports any organization's questionnaire up to the ten-question limit.
+4. **Volunteer identity and PII handling** — Removed `volunteer_name_redacted` from `volunteer_reflections`. Names live only in the director-restricted `volunteer_identities` table. `submit_reflection` no longer accepts names; the Next.js server endpoint will handle redaction before persisting.
+5. **Idempotency and concurrent token safety** — Uses `ON CONFLICT (organization_id, idempotency_key) DO NOTHING` to eliminate the SELECT-then-INSERT race. Validation happens before any side effects. Token consumption (`UPDATE ... WHERE used_count < max_uses`) occurs only after successful persistence, so failed submissions never consume a use. Duplicate retries return the existing row early without ever touching the token counter.
+6. **Concert aggregation rounding** — SQL `aggregate_concert_encounters` now uses `FLOOR(session_median + 0.5)::int` per session before summing. TypeScript test added proving per-concert rounding differs from rounding the grand total.
+7. **Atomic organization creation** — Added `create_organization(name, slug)` SECURITY DEFINER function that derives the owner from `auth.uid()`, creates the org, and creates the owner membership in the same transaction. Direct table insert policies locked down.
+8. **Evidence referential integrity** — Replaced polymorphic `source_id`/`source_table` with typed nullable FK columns (`source_volunteer_reflection_id`, `source_historical_source_id`, `source_director_input_id`) and a `CHECK` requiring exactly one source. Validation trigger verifies both source existence and matching `organization_id`.
+9. **Quote consent** — Added `source_consent_label` to preserve original labels separately from the verified `consent_status`. Added `chk_quote_confirmed_requires_evidence` constraint so `confirmed_with_evidence` requires a non-null `consent_evidence` value. Live submissions default to `unknown`; imports are never auto-promoted.
+10. **Validation** — TypeScript typecheck passes, lint passes, aggregation tests pass, static SQL checks confirm no forbidden public policies or unintended grants.
+11. **Form version pinned to activity sessions** — Added `form_version_id` to `activity_sessions` with composite FK to `form_versions`. Added partial unique index ensuring at most one active version per organization. Session-creation trigger auto-pins the currently active version. `submit_reflection` now retrieves the form version from the session, rejects submissions without a valid pinned version, and never returns a null reflection ID as though submission succeeded.
+12. **Missing tenant-consistent foreign keys** — Added `FOREIGN KEY (organization_id, form_version_id)` on `organization_questions` and `FOREIGN KEY (organization_id, question_id)` on `reflection_answers`, referencing their composite unique parents.
+13. **Organization creation permissions** — `create_organization()` explicitly granted to `authenticated` (revoked from `PUBLIC` and `anon`), continuing to derive the owner from `auth.uid()` and reject unauthenticated calls.
+14. **Composite foreign-key deletion safety** — Inspected every composite FK containing `organization_id`; no `ON DELETE SET NULL` action targets the required `organization_id` column itself. All server-side functions have explicit `GRANT EXECUTE TO service_role`.
 
 **Outstanding Work:**
-- Design core tables:
-  - `volunteer_reflections`
-  - `historical_sources`
-  - `evidence_items`
-  - `director_inputs`
-  - `custom_questions`
-  - `question_suggestions`
-  - `grants` and `grant_responses`
-- Define indexes, foreign keys, and RLS policies.
-- Write migration SQL for review before application.
+- None (awaiting review before Phase 3).
 
-**Next Step:** Draft the initial migration SQL and submit for review.
+**Next Step:** Review all migration SQL files, then apply locally (requires Docker/Postgres) and push to remote.
 
 ---
 
@@ -120,9 +142,9 @@
 
 **Outstanding Work:**
 - Configure server and client Supabase clients.
-- Implement director passcode verification (server-side only, using a server-only secret).
-- Issue signed, expiring session cookies upon successful passcode entry.
-- Protect director routes with cookie validation middleware.
+- Implement Supabase Auth sign-in/sign-up for directors.
+- Map authenticated users to organization memberships with role checks (`owner`, `director`, `viewer`).
+- Protect director routes with Supabase session validation middleware.
 
 **Next Step:** Build the login page and route guards.
 
@@ -274,4 +296,4 @@
 ---
 
 ### Current Phase
-**Phase 2A is complete (dataset reconciled, contract mapped). Next: Review `docs/DATA_CONTRACT_MAPPING.md` and proceed to Phase 2 database schema design.**
+**Phase 2B is drafted and audited (Phase 2C complete). Next: Explicit review and approval before applying migrations remotely (Phase 3).**

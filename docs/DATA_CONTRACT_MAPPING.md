@@ -120,7 +120,7 @@ Each submission is one musician's report about **one concert**. The same concert
 | 8 | **Confidence field name** | `volunteerExperience` | `volunteer_confidence` | Medium | Rename payload key. UI label should also change from "How did the performance go for you?" to "How confident did you feel leading this visit?" — **this is a semantic change**, not just a rename. |
 | 9 | **Standout moment name** | `standoutMoment` | `standout_moment` | Low | Rename payload key. |
 | 10 | **Improvement name** | `improvement` | `next_visit_improvement` | Low | Rename payload key. |
-| 11 | **Missing structured quote** | No quote UI at all | Optional structured `{text, speaker, consent}` | **High** | Add optional quote section with three sub-fields: text, speaker (`resident` / `family member` / `staff`), consent (`Documented by host site` / `Not documented`). |
+| 11 | **Missing structured quote** | No quote UI at all | Optional structured `{text, speaker, consent_status}` | **High** | Add optional quote section with three sub-fields: text, speaker (`resident` / `family member` / `staff`), consent_status (`unknown` / `not_documented` / `confirmed_with_evidence` / `denied`). |
 | 12 | **Missing concert context** | Form derives context only from date + host site | Explicit `concert_id` required | **High** | The frontend needs a mechanism to know which concert the volunteer is reporting on. See §6. |
 | 13 | **Custom question handling** | `customAnswer` free text | Not defined in dataset envelope | Low | The dataset represents the NOTEWORTHE v2.0.1 questionnaire. The custom question "Which songs did you play?" is org-specific and should be stored in a `custom_answers` JSONB or `custom_question_responses` pattern that does not collide with the standard contract. |
 
@@ -167,10 +167,14 @@ These are **different constructs**. The dataset’s wording (`volunteer_confiden
 
 ### 5D. `quote.consent`
 
-| Canonical value | Meaning |
-|-----------------|---------|
-| `Documented by host site` | Host site has documented consent; quote may be used in funder-facing outputs. |
-| `Not documented` | No documented consent; quote must be redacted from funder-facing outputs. |
+| Canonical value | Meaning | Funder-facing safe? |
+|-----------------|---------|---------------------|
+| `unknown` | Consent status has not been evaluated. | No |
+| `not_documented` | No documented consent exists. | No |
+| `confirmed_with_evidence` | Consent confirmed with supporting evidence from the quoted person or legal representative. | Yes |
+| `denied` | Consent explicitly denied by the quoted person or legal representative. | No |
+
+> **Rule:** `confirmed_with_evidence` is the only status that may be used in grant responses. `unknown` and `not_documented` are reserved for internal evidence. `denied` must never appear in funder-facing outputs.
 
 ---
 
@@ -217,12 +221,12 @@ B. **Fallback (if no concert pre-created):** Allow manual entry of date + host s
 
 | Rule | Source | Enforcement |
 |------|--------|-------------|
-| Volunteer names are director-only metadata. | `PROJECT_SPEC.md` | Store `volunteer_name` in a column that is excluded from AI prompts and funder-facing exports. |
+| Volunteer names are director-only metadata. | `PROJECT_SPEC.md` | Names stored only in `volunteer_identities` (director-only). Never included in `volunteer_reflections`, AI prompts, or funder-facing exports. |
 | Redact PII before AI calls. | `PROJECT_SPEC.md`, `CLAUDE.md` | Build server-side redaction helper (`lib/ai/redaction.ts`); run on `standout_moment`, `next_visit_improvement`, and `quote.text`. |
-| Count encounters, not unique individuals. | `PROJECT_SPEC.md` | UI label already says this. Aggregation rules use medians, not deduplication. |
-| Quotes only with documented consent. | `PROJECT_SPEC.md` | Filter `quote.consent = 'Documented by host site'` before including in grant outputs. `Not documented` quotes are evidence for internal use only. |
+| Count encounters, not unique individuals. | `PROJECT_SPEC.md` | UI label already says this. Aggregation rules use medians per session, not deduplication. |
+| Quotes only with sufficient consent evidence. | `PROJECT_SPEC.md`, `CLAUDE.md` | Allow only `quote_records.consent_status = 'confirmed_with_evidence'` in grant outputs. Treat `unknown`, `not_documented`, and `denied` as internal-only. Host-site documentation alone does not confer participant consent. |
 | No health info or room numbers. | `PROJECT_SPEC.md` | Privacy note displayed on form. Redaction should catch known health terms and room-number patterns. |
-| Every claim traceable to source. | `PROJECT_SPEC.md` | Store `submission_id` and `concert_id` on every extracted evidence item. |
+| Every claim traceable to source. | `PROJECT_SPEC.md` | Evidence items link via typed nullable FK (`source_volunteer_reflection_id`, `source_historical_source_id`, `source_director_input_id`) with organization-matching trigger validation. |
 
 ---
 
@@ -256,21 +260,22 @@ export interface Concert {
 export interface SubmissionQuote {
   text: string;
   speaker: "resident" | "family member" | "staff";
-  consent: "Documented by host site" | "Not documented";
+  consent_status: "unknown" | "not_documented" | "confirmed_with_evidence" | "denied";
 }
 
 // Core submission (shared contract)
 export interface VolunteerReflection {
   id: string;
-  concert_id: string;
-  volunteer_id: string;
+  session_id: string | null;
+  volunteer_id: string | null;
   submitted_at: string; // ISO 8601
-  date: string; // YYYY-MM-DD
-  host_site_id: string;
+  date: string | null; // YYYY-MM-DD; derived from session or manual entry
+  host_site_id: string | null;
   format: "solo" | "small group" | "sing-along" | "interactive";
   participant_encounters: number;
-  family_or_caregivers: "none" | "a few" | "many";
   minutes_performed: number;
+  // Org-specific answers stored in reflection_answers; these are convenience fields
+  family_or_caregivers: "none" | "a few" | "many";
   audience_engagement: number; // 1–5
   volunteer_confidence: number; // 1–5
   standout_moment: string;
@@ -286,7 +291,7 @@ export interface VolunteerReflection {
 
 ## 9. Proposed Zod API Contract
 
-> For the `/api/reflect` route handler.
+> For the `/api/reflect` route handler. The server resolves the session from the token, redacts PII, then persists via the service role.
 
 ```typescript
 import { z } from "zod";
@@ -294,57 +299,133 @@ import { z } from "zod";
 const QuoteSchema = z.object({
   text: z.string().min(1).max(2000),
   speaker: z.enum(["resident", "family member", "staff"]),
-  consent: z.enum(["Documented by host site", "Not documented"]),
+  consent_status: z.enum(["unknown", "not_documented", "confirmed_with_evidence", "denied"]).default("unknown"),
 });
 
 export const ReflectionSubmissionSchema = z.object({
-  concert_id: z.string().uuid(), // or string for mock IDs
-  volunteer_name: z.string().min(1).max(100), // director-only metadata
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  host_site_id: z.string(),
+  token: z.string().min(16), // opaque session invitation token
+  idempotency_key: z.string().min(1).max(64),
   format: z.enum(["solo", "small group", "sing-along", "interactive"]),
   participant_encounters: z.number().int().min(0),
-  family_or_caregivers: z.enum(["none", "a few", "many"]),
   minutes_performed: z.number().int().min(1),
-  audience_engagement: z.number().int().min(1).max(5),
-  volunteer_confidence: z.number().int().min(1).max(5),
-  standout_moment: z.string().min(1).max(4000),
-  next_visit_improvement: z.string().min(1).max(4000),
-  quote: QuoteSchema.nullable(),
-  custom_answer: z.string().max(2000).optional(),
+  // Dynamic answers keyed to question_key in the active form version
+  answers: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  quote: QuoteSchema.nullable().optional(),
 });
 ```
 
 ---
 
-## 10. Decisions Requiring Team Agreement
+## 10. Decisions Resolved (Phase 2B)
 
-1. **Concert context mechanism:** Pre-created concerts with tokens/URLs (recommended) vs. manual date+site entry with director reconciliation?
-2. **`volunteerExperience` → `volunteer_confidence` semantic change:** Does the product team approve changing the question from "How did the performance go for you?" to "How confident did you feel leading this visit?"
-3. **Adding `family_or_caregivers`:** This is a new required question that was not in the original frontend. Does it replace one of the existing slots, or is the total now 10 standard + this = 11? (The spec says max 10 active questions: 9 standard + 1 custom.)
-   - *Note:* The dataset has 11 form fields (10 questions + quote). If we must keep to 10, one standard question needs to be absorbed or the quote treated as a special optional component outside the count.
-4. **Quote question count:** Does the structured quote count as one of the 10 active questions, or is it an always-optional special component alongside them?
-5. **Solo format:** The dataset has zero `solo` submissions, but the spec requires it as an option. Should it remain in the enum for future use?
-6. **Custom question versioning:** The current custom question is "Which songs did you play?" Should this be stored as a flexible `custom_questions` response, or hardcoded for the NOTEWORTHE demo?
+The following decisions were approved during Phase 2B database architecture design:
+
+1. **Concert context mechanism: Pre-created activity sessions with opaque invitation tokens (approved).**
+   - Directors create activity sessions in advance. Each session receives an opaque token (`session_invitation_tokens.token`).
+   - Volunteer form URL: `/reflect?token=<opaque>`.
+   - Server resolves `token` → `session_id` + `organization_id` (validated server-side; never trusts client-supplied identifiers).
+   - Date and host site are displayed as read-only context; the volunteer does not edit them.
+   - Fallback: manual submissions without a token remain unlinked (`session_id = NULL`) until a director manually associates them.
+
+2. **`volunteerExperience` → `volunteer_confidence` semantic change (approved).**
+   - Frontend question changes from *"How did the performance go for you?"* to *"How confident did you feel leading this visit?"*.
+   - Scale remains 1–5. Dataset wording is the authoritative contract.
+
+3. **Adding `family_or_caregivers` (approved).**
+   - The NOTEWORTHE dataset contains 10 structured questions. The platform supports up to 10 active organization questions per form version.
+   - For NOTEWORTHE, the 10 dataset questions become `organization_questions` rows in form version 1.
+   - Other organizations may configure a different mix, still capped at 10 active questions.
+
+4. **Quote question count (approved).**
+   - The structured quote (`text`, `speaker`, `consent`) is an **always-optional special component** outside the 10-question limit.
+   - It is stored in `quote_records`, not `reflection_answers`.
+
+5. **Solo format (approved).**
+   - `solo` remains in the `format` enum even though the dataset has zero occurrences. Future organizations may use it.
+
+6. **Custom question versioning (approved).**
+   - Custom questions are stored as rows in `organization_questions` tied to a `form_versions` snapshot.
+   - The NOTEWORTHE custom question *("Which songs did you play?")* is one of the 10 active questions in form version 1.
+   - Form versioning allows organizations to retire, modify, or add questions while preserving historical wording in `reflection_answers.question_text_snapshot`.
 
 ---
 
-## 11. Files Touched / Created in Phase 2A
+## 11. Import Batch Provenance Mapping
+
+Every imported record receives provenance metadata via `import_batches`:
+
+| Classification | Meaning | Use case |
+|----------------|---------|----------|
+| `synthetic_demo` | Explicitly confirmed mock data | NOTEWORTHE seed data, simulated reflections |
+| `historical_import` | Genuine historical records from a director-uploaded file | Legacy spreadsheet, text export, PDF excerpt |
+| `live_submission` | Real-time volunteer form submission | Current production submissions |
+
+Import workflow:
+1. Director selects file and classification.
+2. System requires **explicit confirmation** of classification before processing.
+3. Validation: stable IDs, no duplicates (unique constraints), no invalid FKs.
+4. Redaction runs server-side before persistence (Phase 5).
+5. `import_batches` row created with provenance metadata.
+6. Records inserted with `import_batch_id`.
+7. Reimport with same stable IDs is idempotent (`ON CONFLICT DO NOTHING` on `volunteer_reflections.idempotency_key`).
+
+---
+
+## 12. Form Version Snapshot Mapping
+
+After Phase 2C corrections, basic activity metadata is stored as typed columns on `volunteer_reflections`, not as dynamic `reflection_answers`. Only organization-specific reflection questions and the custom question remain in `organization_questions`.
+
+The NOTEWORTHE dataset maps the following to `organization_questions` for org #1, form version 1:
+
+| Dataset key | `question_key` | `question_type` | `sort_order` | `is_required` | Notes |
+|-------------|----------------|-----------------|--------------|---------------|-------|
+| `family_or_caregivers` | `family_or_caregivers` | `single_choice` | 1 | true | Org-specific reflection answer |
+| `audience_engagement` | `audience_engagement` | `rating` | 2 | true | Org-specific reflection answer |
+| `volunteer_confidence` | `volunteer_confidence` | `rating` | 3 | true | Org-specific reflection answer |
+| `standout_moment` | `standout_moment` | `text` | 4 | true | Org-specific reflection answer |
+| `next_visit_improvement` | `next_visit_improvement` | `text` | 5 | true | Org-specific reflection answer |
+| `custom_question` | `custom_question` | `text` | 6 | false | NOTEWORTHE legacy: "Which songs did you play?" |
+
+**Structured activity metadata (typed columns on `volunteer_reflections`):**
+
+| Field | Column | Type | Stored |
+|-------|--------|------|--------|
+| `date` | `date` | `date` | Derived from linked `activity_sessions.date`; or directly for unlinked submissions |
+| `host_site_id` | `host_site_id` | `uuid` | Derived from linked `activity_sessions.host_site_id`; or directly for unlinked submissions |
+| `format` | `format` | `text` | Typed column on every reflection |
+| `participant_encounters` | `participant_encounters` | `int` | Typed column on every reflection |
+| `minutes_performed` | `minutes_performed` | `int` | Typed column on every reflection |
+
+`quote` (optional) maps to `quote_records` and does not appear in `organization_questions`.
+
+---
+
+## 13. Files Touched / Created in Phase 2A + 2B
 
 | File | Action |
 |------|--------|
 | `data/private-input/noteworthe-sample.json` | Inspected (read-only) |
 | `data/inspect-dataset.js` | Created — safe local inspection script (ESM) |
-| `docs/DATA_CONTRACT_MAPPING.md` | Created (this file) |
-| `docs/IMPLEMENTATION_STATUS.md` | Updated to reflect Phase 2A completion |
+| `docs/DATA_CONTRACT_MAPPING.md` | Created and updated with resolved decisions |
+| `docs/IMPLEMENTATION_STATUS.md` | Phase 2B marked complete |
+| `supabase/migrations/00001_trace_multitenant_core.sql` | Created |
+| `supabase/migrations/00002_trace_org_config.sql` | Created |
+| `supabase/migrations/00003_trace_sessions.sql` | Created |
+| `supabase/migrations/00004_trace_reflections.sql` | Created |
+| `supabase/migrations/00005_trace_evidence.sql` | Created |
+| `supabase/migrations/00006_trace_grants.sql` | Created |
+| `supabase/migrations/00007_trace_optimizer.sql` | Created |
+| `supabase/migrations/00008_trace_import.sql` | Created |
+| `types/database.ts` | Created — TypeScript interfaces matching schema |
 
 ---
 
-## 12. Next Steps (pending review)
+## 14. Next Steps
 
-1. Resolve the 6 decisions in §10.
-2. Update `types/index.ts` with the approved shared contract.
-3. Update `reflect-form.tsx` to match the approved field names, labels, and add missing fields (quote, family_or_caregivers).
-4. Design the `concert_id` context mechanism.
-5. Draft the Zod API schema and `/api/reflect` route handler.
-6. Proceed to Phase 2 (database schema design) with this mapping as the source of truth.
+1. Review all 8 migration SQL files for correctness.
+2. Review `types/database.ts` for completeness.
+3. Apply migrations locally (`supabase start` when Docker is available) and validate.
+4. Upon explicit approval, run `npx supabase db push --remote` to apply to project `qesgwuiaqswwfpypwgqx`.
+5. Generate TypeScript types from the live Supabase schema (`supabase gen types typescript`).
+6. Update frontend form fields to match approved shared contract (`volunteer_confidence`, `participant_encounters`, quote section, token-based session resolution).
+7. Proceed to Phase 3 (migration application) and Phase 4 (Supabase integration + director access).
