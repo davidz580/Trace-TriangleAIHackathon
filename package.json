@@ -9,7 +9,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+ trace-development
+    "test": "node --test \"lib/**/*.test.ts\""
+
     "test": "vitest run"
+main
   },
   "repository": {
     "type": "git",
