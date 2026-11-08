@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { publishFormVersion } from "@/app/actions/questions";
-import { Check, X, Edit3, RotateCcw, Send } from "lucide-react";
+import { Check, X, Edit3, RotateCcw, Send, Plus } from "lucide-react";
 
 interface ProposedQuestion {
   question_key: string;
@@ -36,6 +36,10 @@ export default function QuestionsStep({ organizationId }: QuestionsStepProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customText, setCustomText] = useState("");
+  const [customType, setCustomType] = useState<QuestionItem["question_type"]>("text");
+  const [customKey, setCustomKey] = useState("");
 
   async function generate() {
     setLoading(true);
@@ -132,6 +136,33 @@ export default function QuestionsStep({ organizationId }: QuestionsStepProps) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, editedText: text } : i)));
   }
 
+  function handleAddCustomQuestion() {
+    if (!customText.trim() || !customKey.trim()) return;
+    const id = `custom-${Date.now()}`;
+    const newItem: QuestionItem = {
+      id,
+      question_key: customKey.trim().toLowerCase().replace(/\s+/g, "_").slice(0, 50),
+      question_text: customText.trim(),
+      question_type: customType,
+      approved: true,
+      rejected: false,
+      editing: false,
+      editedText: customText.trim(),
+    };
+    setItems((prev) => [...prev, newItem]);
+    setCustomText("");
+    setCustomKey("");
+    setCustomType("text");
+    setShowCustomForm(false);
+  }
+
+  function handleCancelCustom() {
+    setShowCustomForm(false);
+    setCustomText("");
+    setCustomKey("");
+    setCustomType("text");
+  }
+
   async function handlePublish() {
     if (!canPublish) return;
     setPublishing(true);
@@ -214,6 +245,12 @@ export default function QuestionsStep({ organizationId }: QuestionsStepProps) {
                     {item.options && (
                       <Badge variant="secondary">{item.options.length} options</Badge>
                     )}
+                    {item.approved && (
+                      <Badge variant="accent">Question approved</Badge>
+                    )}
+                    {item.rejected && (
+                      <Badge variant="danger">Question rejected</Badge>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -229,9 +266,9 @@ export default function QuestionsStep({ organizationId }: QuestionsStepProps) {
                     variant={item.approved ? "primary" : "ghost"}
                     size="sm"
                     onClick={() => toggleApprove(item.id)}
-                    aria-label="Approve"
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="h-4 w-4 mr-1" />
+                    {item.approved ? "Approved" : "Approve"}
                   </Button>
                   <Button
                     variant={item.rejected ? "danger" : "ghost"}
@@ -252,6 +289,72 @@ export default function QuestionsStep({ organizationId }: QuestionsStepProps) {
           </Card>
         ))}
       </div>
+
+      {!showCustomForm && (
+        <Button variant="ghost" size="sm" onClick={() => setShowCustomForm(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add custom question
+        </Button>
+      )}
+
+      {showCustomForm && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium text-foreground">Add custom question</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              placeholder="Enter your question text"
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              rows={2}
+            />
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Internal key
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. volunteer_mood"
+                  value={customKey}
+                  onChange={(e) => setCustomKey(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Answer type
+                </label>
+                <select
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value as QuestionItem["question_type"])}
+                  className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground w-full"
+                >
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="rating">Rating</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="single_choice">Single choice</option>
+                  <option value="multi_choice">Multi choice</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={handleAddCustomQuestion}
+                disabled={!customText.trim() || !customKey.trim()}
+              >
+                Add question
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleCancelCustom}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
 

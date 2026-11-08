@@ -21,10 +21,21 @@ export async function createSession(
     return { error: parsed.error.issues.map((i) => i.message).join("; ") };
   }
 
+  // Defensively pin the active form version so sessions always have a
+  // questionnaire, even if the database trigger is not present.
+  const { data: activeVersion } = await supabase
+    .from("form_versions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+
   const { data, error } = await supabase
     .from("activity_sessions")
     .insert({
       organization_id: organizationId,
+      form_version_id: activeVersion?.id ?? null,
       ...parsed.data,
     })
     .select()

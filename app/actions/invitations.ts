@@ -64,9 +64,7 @@ export async function deactivateToken(organizationId: string, tokenId: string) {
   return { success: true };
 }
 
-export async function generateQRCodeDataUrl(tokenValue: string): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const url = `${baseUrl}/reflect?token=${encodeURIComponent(tokenValue)}`;
+export async function generateQRCodeDataUrl(url: string): Promise<string> {
   return QRCode.toDataURL(url, { width: 256, margin: 2 });
 }
 

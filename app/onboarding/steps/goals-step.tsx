@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { addGoal, removeGoal, addMetric, removeMetric } from "@/app/actions/goals";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 interface GoalsStepProps {
   organizationId: string;
@@ -109,13 +109,18 @@ export default function GoalsStep({ organizationId, onNext, onBack }: GoalsStepP
             rows={1}
           />
           <Button onClick={handleAddGoal} disabled={loading || !newGoalTitle.trim()} size="sm">
-            <Plus className="h-4 w-4" />
+            Add goal
           </Button>
         </div>
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-base font-medium text-foreground">Metrics</h3>
+        <div className="space-y-1">
+          <h3 className="text-base font-medium text-foreground">Metrics</h3>
+          <p className="text-sm text-muted-foreground">
+            Metrics are the numbers you track to see if your program is working.
+          </p>
+        </div>
         {metrics.map((m) => (
           <Card key={m.id}>
             <CardContent className="flex items-center justify-between py-4">
@@ -133,32 +138,49 @@ export default function GoalsStep({ organizationId, onNext, onBack }: GoalsStepP
           </Card>
         ))}
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]">
-          <Input
-            placeholder="Metric name"
-            value={newMetricName}
-            onChange={(e) => setNewMetricName(e.target.value)}
-          />
-          <Input
-            placeholder="Unit (optional)"
-            value={newMetricUnit}
-            onChange={(e) => setNewMetricUnit(e.target.value)}
-            className="w-32"
-          />
-          <select
-            value={newMetricAgg}
-            onChange={(e) => setNewMetricAgg(e.target.value as typeof newMetricAgg)}
-            className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground"
-          >
-            <option value="sum">Sum</option>
-            <option value="median">Median</option>
-            <option value="average">Average</option>
-            <option value="count">Count</option>
-          </select>
-          <Button onClick={handleAddMetric} disabled={loading || !newMetricName.trim()} size="sm">
-            <Plus className="h-4 w-4" />
-          </Button>
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto_auto]">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">What do you want to measure?</label>
+            <Input
+              placeholder="e.g. Volunteer hours"
+              value={newMetricName}
+              onChange={(e) => setNewMetricName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">How will you count it?</label>
+            <Input
+              placeholder="e.g. hours"
+              value={newMetricUnit}
+              onChange={(e) => setNewMetricUnit(e.target.value)}
+              className="w-32"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Aggregation</label>
+            <select
+              value={newMetricAgg}
+              onChange={(e) => setNewMetricAgg(e.target.value as typeof newMetricAgg)}
+              className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+            >
+              <option value="sum">Sum</option>
+              <option value="median">Median</option>
+              <option value="average">Average</option>
+              <option value="count">Count</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <Button onClick={handleAddMetric} disabled={loading || !newMetricName.trim()} size="sm">
+              Add metric
+            </Button>
+          </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Examples: <span className="font-medium text-foreground">Volunteer hours</span> — hours,{" "}
+          <span className="font-medium text-foreground">Performances delivered</span> — performances,{" "}
+          <span className="font-medium text-foreground">Participant encounters</span> — encounters
+        </p>
       </div>
 
       <div className="flex justify-between">

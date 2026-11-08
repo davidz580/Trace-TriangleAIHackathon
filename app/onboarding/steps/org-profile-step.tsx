@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,7 @@ export default function OrgProfileStep({ onCreated }: { onCreated: (id: string) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const submittingRef = useRef(false);
 
   function handleNameChange(value: string) {
     setName(value);
@@ -34,40 +35,49 @@ export default function OrgProfileStep({ onCreated }: { onCreated: (id: string) 
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     setError("");
     setFieldErrors({});
     setLoading(true);
 
-    const formData = new FormData();
-    formData.set("name", name.trim());
-    formData.set("slug", slug.trim());
+    try {
+      const formData = new FormData();
+      formData.set("name", name.trim());
+      formData.set("slug", slug.trim());
 
-    const createResult = await createOrganization(formData);
-    if (!("organizationId" in createResult)) {
-      if ("fieldErrors" in createResult) {
-        setFieldErrors(createResult.fieldErrors);
-      } else {
-        setError(createResult.error ?? "Failed to create organization.");
+      const createResult = await createOrganization(formData);
+      if (!("organizationId" in createResult)) {
+        if ("fieldErrors" in createResult) {
+          setFieldErrors(createResult.fieldErrors);
+        } else {
+          setError(createResult.error ?? "Failed to create organization.");
+        }
+        return;
       }
+
+      const orgId = createResult.organizationId;
+      const updateResult = await updateOrganizationProfile(orgId, {
+        mission: mission.trim() || undefined,
+        history: history.trim() || undefined,
+        service_region: serviceRegion.trim() || undefined,
+      });
+
+      if (updateResult.error) {
+        setError(updateResult.error);
+        return;
+      }
+
+      onCreated(orgId);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
+      );
+    } finally {
       setLoading(false);
-      return;
+      submittingRef.current = false;
     }
-
-    const orgId = createResult.organizationId;
-    const updateResult = await updateOrganizationProfile(orgId, {
-      mission: mission.trim() || undefined,
-      history: history.trim() || undefined,
-      service_region: serviceRegion.trim() || undefined,
-    });
-
-    if (updateResult.error) {
-      setError(updateResult.error);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(false);
-    onCreated(orgId);
   }
 
   return (

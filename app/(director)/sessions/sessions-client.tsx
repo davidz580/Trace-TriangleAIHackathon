@@ -15,6 +15,7 @@ import {
   deactivateToken,
   generateQRCodeDataUrl,
 } from "@/app/actions/invitations";
+import { buildInvitationUrl } from "@/lib/invitation-url";
 import { CalendarDays, Calendar, Copy, Download, QrCode, Plus, X, Trash2 } from "lucide-react";
 
 interface SessionItem {
@@ -383,15 +384,15 @@ function TokenRow({
   onDeactivate: () => void;
   canDeactivate: boolean;
 }) {
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const url = `${baseUrl}/reflect?token=${encodeURIComponent(token.token)}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const url = buildInvitationUrl(origin, token.token);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
 
   async function toggleQr() {
     if (!showQr) {
       if (!qrDataUrl) {
-        const dataUrl = await generateQRCodeDataUrl(token.token);
+        const dataUrl = await generateQRCodeDataUrl(url);
         setQrDataUrl(dataUrl);
       }
       setShowQr(true);
