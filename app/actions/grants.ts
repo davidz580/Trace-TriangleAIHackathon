@@ -106,7 +106,7 @@ export async function getGrantWithRequirements(grantId: string) {
 
   const { data: grant, error: grantError } = await supabase
     .from("grants")
-    .select("*, grant_requirements(*)")
+    .select("*")
     .eq("id", grantId)
     .single();
 
@@ -114,17 +114,17 @@ export async function getGrantWithRequirements(grantId: string) {
     return { error: grantError?.message ?? "Grant not found." };
   }
 
-  // Verify membership
-  const { data: membership } = await supabase
-    .from("organization_memberships")
-    .select("role")
-    .eq("organization_id", grant.organization_id)
-    .eq("user_id", user.id)
-    .single();
+  const { data: requirements, error: reqError } = await supabase
+    .from("grant_requirements")
+    .select("*")
+    .eq("grant_id", grantId)
+    .order("sort_order", { ascending: true });
 
-  if (!membership) return { error: "Forbidden" };
+  if (reqError) {
+    return { error: reqError.message };
+  }
 
-  return { grant };
+  return { grant: { ...grant, grant_requirements: requirements ?? [] } };
 }
 
 export async function updateGrantResponse(
