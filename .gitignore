@@ -1,0 +1,29 @@
+.env.local
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build output
+build/
+dist/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Supabase temporary files
+supabase/.temp/
+
+# Miscellaneous
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+/data/private-input/

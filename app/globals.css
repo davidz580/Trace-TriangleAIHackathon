@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FFFFFF;
+  --foreground: #1C2926;
+  --card: #FFFFFF;
+  --card-foreground: #1C2926;
+  --muted: #F7F9F7;
+  --muted-foreground: #556B64;
+  --border: #E3E8E2;
+  --accent: #286B55;
+  --accent-foreground: #FFFFFF;
+  --accent-hover: #1E5241;
+  --accent-subtle: #E5F0E9;
+  --danger: #C0392B;
+  --danger-foreground: #FFFFFF;
+  --ring: #286B55;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0F1C26;
+    --foreground: #E8F4FC;
+    --card: #1D3445;
+    --card-foreground: #E8F4FC;
+    --muted: #1A2E3D;
+    --muted-foreground: #8FAEC2;
+    --border: #2A4A61;
+    --accent: #4A9BD1;
+    --accent-foreground: #0F1C26;
+    --accent-hover: #6BB0E0;
+    --accent-subtle: #1A3A52;
+    --danger: #E74C3C;
+    --danger-foreground: #0F1C26;
+    --ring: #4A9BD1;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+button:not(:disabled),
+a[href] {
+  cursor: pointer;
+}

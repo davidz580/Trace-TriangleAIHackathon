@@ -1,0 +1,52 @@
+{
+  "name": "trace-triangleaihackathon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trace — turn volunteer experiences into grant evidence",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidz580/Trace-TriangleAIHackathon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/davidz580/Trace-TriangleAIHackathon/issues"
+  },
+  "homepage": "https://github.com/davidz580/Trace-TriangleAIHackathon#readme",
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.487.0",
+    "next": "16.4.5",
+    "pdf-parse": "^2.4.5",
+    "qrcode": "^1.5.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.5",
+    "supabase": "^3.0.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^3.0.0"
+  }
+}
