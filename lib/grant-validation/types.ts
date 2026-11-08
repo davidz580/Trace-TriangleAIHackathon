@@ -40,6 +40,13 @@ export interface QuoteReference {
     quoteRecordId: string;
     /** The text the model claims the quote says. Must match the stored text. */
     quotedText: string;
+    /**
+     * Declares that `quotedText` is a contiguous excerpt of the stored quote (gaps
+     * marked "..." or "…" allowed, in order). Without this, only an exact (normalized)
+     * match passes. A declared excerpt always requires human review: the validator
+     * cannot judge whether truncation changes the meaning.
+     */
+    excerpt?: boolean;
 }
 
 export interface GeneratedClaim {
@@ -47,8 +54,15 @@ export interface GeneratedClaim {
     claimType: ClaimType;
     /** Evidence items the model cites. All claim types require at least one. */
     evidenceItemIds: string[];
-    /** Required when claimType === "metric". */
+    /** Required when claimType === "metric". The primary quantity of the claim. */
     metricReference?: MetricReference;
+    /**
+     * Further trusted quantities stated in the same claim ("60 concerts across 4
+     * sites" -> a sites metric; "30 in 2025 and 30 in 2026" -> a second period).
+     * Each is validated exactly like `metricReference`. A quantity with no
+     * reference is never silently accepted: it is flagged for review.
+     */
+    additionalMetricReferences?: MetricReference[];
     /** Required when claimType === "quote". */
     quoteReference?: QuoteReference;
 }
@@ -69,8 +83,33 @@ export interface TrustedMetric {
     metricKey: string;
     value: number;
     unit: string;
-    /** Reporting period the value was computed over. */
+    /**
+     * Reporting period the value was computed over. Machine-readable forms (compared
+     * with the dates in claim text): "2025", "2025-Q1", "2025-03", "2025-03-15", or an
+     * interval "A/B" of those (e.g. "2025-01/2026-11", "2025-11-08/2026-11-07").
+     * Other labels (e.g. "FY2025") are matched literally only.
+     */
     period: string;
+    // ── PROPOSED application-level fields (not database columns; types/database.ts is unchanged). ──
+    // All optional, so existing callers need not supply them. Absent means "not permitted",
+    // never "assume". They would be filled by server-side code that computes metrics.
+    /** Other phrases naming this measure in prose (e.g. ["people", "attendees"]). */
+    unitAliases?: readonly string[];
+    /**
+     * Documented rounding rules. A stated number equal to `value` rounded to
+     * `increment` is accepted; with `requiresApproximateWording` (default true) the
+     * prose must also hedge ("approximately", "about", ...). No rule: no rounding.
+     */
+    permittedRounding?: readonly { increment: number; requiresApproximateWording?: boolean }[];
+    /** Explicit conversions: prose may state value * factor in `unit` (90 minutes -> hours: 1/60). */
+    unitConversions?: readonly { unit: string; factor: number }[];
+    /** Server-computed per-unit range (e.g. attendance per visit). Needed for "between A and B" / "up to N". */
+    minimum?: number;
+    maximum?: number;
+    /** "average"/"percentage" must be computed by trusted code; prose saying so needs a matching statistic. Default "total". */
+    statistic?: "total" | "average" | "percentage";
+    /** Present only for server-computed signed change vs `baselinePeriod`; required for "increased by 10%". */
+    comparison?: { baselinePeriod: string };
 }
 
 /** Trusted inputs. Callers load these server-side; the validator does no I/O. */
@@ -97,11 +136,14 @@ export type GrantValidationErrorCode =
     | "METRIC_UNIT_MISMATCH"
     | "METRIC_PERIOD_MISMATCH"
     | "METRIC_CLAIM_TEXT_VALUE_MISMATCH"
+    | "METRIC_CLAIM_TEXT_UNIT_MISMATCH"
+    | "PERIOD_TEXT_MISMATCH"
     | "QUOTE_REFERENCE_MISSING"
     | "QUOTE_NOT_FOUND"
     | "QUOTE_WRONG_ORGANIZATION"
     | "QUOTE_SOURCE_NOT_CITED"
     | "QUOTE_TEXT_MISMATCH"
+    | "QUOTE_ATTRIBUTION_MISMATCH"
     | "QUOTE_CONSENT_NOT_CONFIRMED"
     | "QUOTE_CONSENT_EVIDENCE_MISSING";
 
@@ -119,6 +161,16 @@ export type GrantReviewFlagCode =
     | "CLAIM_TEXT_NOT_IN_DRAFT"
     | "METRIC_VALUE_NOT_IN_DRAFT"
     | "NUMBER_IN_DRAFT_NOT_BACKED"
+    | "NUMBER_IN_CLAIM_NOT_BACKED"
+    | "AMBIGUOUS_MEASURE_ASSOCIATION"
+    | "DERIVED_STATISTIC_NOT_BACKED"
+    | "COMPARISON_NOT_BACKED"
+    | "BOUND_OR_RANGE_NOT_BACKED"
+    | "PERIOD_WORDING_UNVERIFIED"
+    | "NON_MEASURE_NUMBER_NEEDS_SOURCE"
+    | "UNRECOGNIZED_NUMBER_FORMAT"
+    | "QUOTE_EXCERPT_REQUIRES_REVIEW"
+    | "QUOTE_ATTRIBUTION_UNVERIFIED"
     | "QUOTE_NOT_IN_DRAFT"
     | "QUOTED_TEXT_IN_DRAFT_NOT_BACKED"
     | "DRAFT_TEXT_NOT_COVERED_BY_CLAIMS";

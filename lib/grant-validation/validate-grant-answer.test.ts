@@ -146,12 +146,23 @@ describe("metric references", () => {
 });
 
 describe("metric claim text must not hide a wrong quantity", () => {
-    it("fails when the correct number appears alongside an incorrect one", () => {
+    it("fails when the correct number appears alongside a wrong number of the SAME measure", () => {
         const a = makeValidAnswer();
-        a.claims[0].claimText = "In 2025-Q1 we performed 60 concerts for 600 residents.";
+        a.claims[0].claimText = "In 2025-Q1 we performed 60 concerts, plus 600 concerts at other venues.";
         const r = validateGrantAnswer(a, ctx);
         assert.ok(hasError(r, "METRIC_CLAIM_TEXT_VALUE_MISMATCH", 0));
         assert.match(r.errors.find((e) => e.code === "METRIC_CLAIM_TEXT_VALUE_MISMATCH")!.message, /600/);
+    });
+
+    it("flags, but does not reject, an extra quantity of a DIFFERENT measure that no reference covers", () => {
+        // Behavior change: this used to be a blocking error for ANY extra number. A different measure
+        // ("600 residents") is not contradicted by the concert count; it is merely unsupported.
+        const a = makeValidAnswer();
+        a.claims[0].claimText = "In 2025-Q1 we performed 60 concerts for 600 residents.";
+        const r = validateGrantAnswer(a, ctx);
+        assert.deepStrictEqual(r.errors, []);
+        assert.ok(r.reviewFlags.some((f) => f.code === "NUMBER_IN_CLAIM_NOT_BACKED" && f.claimIndex === 0));
+        assert.strictEqual(r.requiresHumanReview, true);
     });
 
     it("does not skip year-like quantities (2000 concerts is not a year)", () => {
@@ -292,11 +303,19 @@ describe("draftText limitations", () => {
         assert.ok(codes(validateGrantAnswer(a, ctx)).includes("MALFORMED_ANSWER"));
     });
 
-    it("known gap: number words in draftText are not detected", () => {
+    it("detects number words in draftText (formerly a known gap)", () => {
         const a = makeValidAnswer();
         a.draftText += " We performed six hundred concerts.";
         const r = validateGrantAnswer(a, ctx);
+        assert.ok(flagCodes(r).includes("NUMBER_IN_DRAFT_NOT_BACKED"));
+    });
+
+    it("known gap: period wording in uncovered prose is not checked (the prose is still flagged as uncovered)", () => {
+        const a = makeValidAnswer();
+        a.draftText += " We performed 60 concerts last year.";
+        const r = validateGrantAnswer(a, ctx);
         assert.ok(!flagCodes(r).includes("NUMBER_IN_DRAFT_NOT_BACKED"));
+        assert.ok(flagCodes(r).includes("DRAFT_TEXT_NOT_COVERED_BY_CLAIMS"));
     });
 });
 

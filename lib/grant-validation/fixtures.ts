@@ -5,7 +5,7 @@
  * display in the UI. Shapes follow types/database.ts (EvidenceItem, QuoteRecord).
  */
 import type { EvidenceItem, QuoteRecord } from "../../types/database.ts";
-import type { GeneratedGrantAnswer, GrantValidationContext } from "./types.ts";
+import type { GeneratedGrantAnswer, GrantValidationContext, MetricReference, TrustedMetric } from "./types.ts";
 
 export const SYNTHETIC_ORG_ID = "synthetic-org-a";
 export const SYNTHETIC_OTHER_ORG_ID = "synthetic-org-b";
@@ -33,6 +33,19 @@ export const syntheticEvidence: EvidenceItem[] = [
         source_historical_source_id: null,
         source_director_input_id: null,
         excerpt: "[synthetic] A resident asked for another song.",
+        claim_type: null,
+        tags: null,
+        verification_status: "verified",
+        consent_status: null,
+        created_at: ts,
+    },
+    {
+        id: "ev-director-context",
+        organization_id: SYNTHETIC_ORG_ID,
+        source_volunteer_reflection_id: null,
+        source_historical_source_id: null,
+        source_director_input_id: "dir-1",
+        excerpt: "[synthetic] Director input describing the organization and its data limits.",
         claim_type: null,
         tags: null,
         verification_status: "verified",
@@ -108,6 +121,12 @@ export const syntheticQuotes: QuoteRecord[] = [
         consent_evidence: "   ",
     }),
     quote({
+        id: "quote-long",
+        text: "I did not expect to enjoy the songs, but the music made my afternoon feel like home.",
+    }),
+    quote({ id: "quote-with-number", text: "I have come to 12 concerts and never missed one." }),
+    quote({ id: "quote-family", speaker: "family member", text: "My mother smiled the whole time." }),
+    quote({
         id: "quote-other-org",
         organization_id: SYNTHETIC_OTHER_ORG_ID,
         reflection_id: "refl-other",
@@ -151,6 +170,50 @@ export function makeValidAnswer(): GeneratedGrantAnswer {
                 claimText: "Volunteers describe a warm, welcoming atmosphere.",
                 claimType: "narrative",
                 evidenceItemIds: ["ev-reflection-2"],
+            },
+        ],
+    };
+}
+
+// ── Builders for language-regression tests ───────────────────────────────────
+// Each test supplies its own trusted metrics, so the supporting data it needs is
+// visible in the test itself. All values are invented.
+
+/** A trusted metric of the synthetic organization. */
+export const trustedMetric = (
+    over: Partial<TrustedMetric> & Pick<TrustedMetric, "metricKey" | "value" | "unit" | "period">,
+): TrustedMetric => ({ organizationId: SYNTHETIC_ORG_ID, ...over });
+
+/** The standard synthetic context with exactly these trusted metrics. */
+export const contextWith = (...metrics: TrustedMetric[]): GrantValidationContext => ({
+    ...syntheticContext,
+    metrics,
+});
+
+/** The reference a faithful model would emit for a trusted metric. */
+export const refFor = (m: TrustedMetric): MetricReference => ({
+    metricKey: m.metricKey,
+    statedValue: m.value,
+    unit: m.unit,
+    period: m.period,
+});
+
+/** One metric claim whose claimText is the whole draft (no uncovered prose). */
+export function metricAnswer(
+    text: string,
+    primary: MetricReference,
+    additional?: MetricReference[],
+): GeneratedGrantAnswer {
+    return {
+        requirementKey: "synthetic-requirement",
+        draftText: text,
+        claims: [
+            {
+                claimText: text,
+                claimType: "metric",
+                evidenceItemIds: ["ev-reflection-1"],
+                metricReference: primary,
+                ...(additional ? { additionalMetricReferences: additional } : {}),
             },
         ],
     };
