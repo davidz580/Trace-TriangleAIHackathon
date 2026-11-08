@@ -1,35 +1,50 @@
+import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/layout/top-bar";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GrantsListClient } from "./grants-list-client";
+import { getGrants } from "@/app/actions/grants";
 
 export const metadata = {
-  title: "Grant Builder",
+  title: "Grant Insights",
 };
 
-export default function GrantsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function GrantsPage() {
+  noStore();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/director/login");
+  }
+
+  const { data: membership } = await supabase
+    .from("organization_memberships")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .single();
+
+  if (!membership) {
+    redirect("/onboarding");
+  }
+
+  const orgId = membership.organization_id;
+  const grantsResult = await getGrants(orgId);
+
   return (
     <div className="space-y-8">
       <TopBar
-        title="Grant Builder"
-        description="Draft grant responses using verified evidence and documented citations."
+        title="Grant Insights"
+        description="Paste grant questions and get evidence-backed analysis to help you answer them."
       />
 
-      <Card className="border-accent-subtle bg-accent-subtle/30">
-        <CardHeader>
-          <CardTitle className="text-base">Community Care Corps Cohort 7 RFP</CardTitle>
-          <CardDescription>
-            Drafting with simulated data. NOTEWORTHE is not an applicant.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Badge variant="accent">Real RFP, drafted with simulated data</Badge>
-        </CardContent>
-      </Card>
-
-      <EmptyState
-        title="No grant drafts yet"
-        description="Grant sections will appear here once evidence is collected and the RFP criteria are loaded."
+      <GrantsListClient
+        organizationId={orgId}
+        initialGrants={grantsResult.grants ?? []}
+        initialError={grantsResult.error}
       />
     </div>
   );

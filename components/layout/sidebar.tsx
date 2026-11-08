@@ -7,17 +7,19 @@ import {
   LayoutDashboard,
   Library,
   FileText,
-  Settings,
   Menu,
   X,
+  LogOut,
+  CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
+import { signOut } from "@/app/actions/auth";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Sessions", href: "/sessions", icon: CalendarDays },
   { label: "Evidence Library", href: "/evidence", icon: Library },
-  { label: "Grant Builder", href: "/grants", icon: FileText },
-  { label: "Form Optimizer", href: "/optimizer", icon: Settings },
+  { label: "Grant Insights", href: "/grants", icon: FileText },
 ];
 
 export function Sidebar() {
@@ -53,7 +55,7 @@ export function Sidebar() {
       >
         <div className="flex h-16 items-center px-6">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold tracking-tight text-foreground">Trace</span>
+            <span className="text-xl font-bold tracking-tight text-foreground">Noteworthe</span>
           </Link>
         </div>
 
@@ -81,9 +83,18 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 space-y-3">
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </form>
           <p className="text-xs text-muted-foreground">
-            Trace — We handle the proof; you handle the impact.
+            Noteworthe — We handle the proof; you handle the impact.
           </p>
         </div>
       </aside>
