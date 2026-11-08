@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server.js";
 import { updateSession } from "@/lib/supabase/middleware";
 
 const publicPaths = ["/reflect", "/director/login", "/director/signup"];
