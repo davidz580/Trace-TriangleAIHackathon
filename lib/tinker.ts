@@ -56,8 +56,7 @@ export async function callTinker<T>({
         model,
         ...(systemParts.length > 0 ? { system: systemParts.join("\n") } : {}),
         messages: apiMessages,
-        max_tokens: 4096,
-        reasoning_effort: false,
+        max_tokens: 8192,
       }),
     });
 
@@ -70,32 +69,31 @@ export async function callTinker<T>({
 
     const data = await response.json();
 
-    // Diagnostics: log content block types, count, stop reason, token usage, request ID
-    const contentBlocks = Array.isArray(data.content) ? data.content : [];
-    const blockTypes = contentBlocks.map(
-      (b: unknown) => (b as { type?: string })?.type ?? "unknown"
-    );
-    const textBlocks = contentBlocks.filter(
-      (b: unknown) => (b as { type?: string })?.type === "text"
-    );
-    const hasTextBlock = textBlocks.length > 0;
-    const totalTextLength = textBlocks.reduce(
-      (sum: number, b: unknown) =>
-        sum + ((b as { text?: string })?.text ?? "").length,
-      0
-    );
+    // Support both Anthropic format (data.content[]) and OpenAI format (data.choices[])
+    let rawContent = "";
+    let finishReason = data.stop_reason ?? data.choices?.[0]?.finish_reason ?? "unknown";
+
+    if (Array.isArray(data.content)) {
+      // Anthropic format
+      const textBlocks = data.content.filter(
+        (b: unknown) => (b as { type?: string })?.type === "text"
+      );
+      rawContent = textBlocks
+        .map((b: unknown) => (b as { text: string }).text)
+        .filter((t: string) => t.length > 0)
+        .join("");
+    } else if (data.choices?.[0]?.message?.content) {
+      // OpenAI format fallback
+      rawContent = data.choices[0].message.content;
+    } else if (typeof data.text === "string") {
+      rawContent = data.text;
+    }
 
     console.log(
-      `[tinker] attempt=${attempt + 1}/${maxRetries + 1} request_id=${data.id ?? "unknown"} block_count=${contentBlocks.length} block_types=[${blockTypes.join(",")}] stop_reason=${data.stop_reason ?? "unknown"} input_tokens=${data.usage?.input_tokens ?? "unknown"} output_tokens=${data.usage?.output_tokens ?? "unknown"} has_text=${hasTextBlock} text_length=${totalTextLength}`
+      `[tinker] attempt=${attempt + 1}/${maxRetries + 1} request_id=${data.id ?? "unknown"} finish_reason=${finishReason} input_tokens=${data.usage?.input_tokens ?? data.usage?.prompt_tokens ?? "unknown"} output_tokens=${data.usage?.output_tokens ?? data.usage?.completion_tokens ?? "unknown"} content_length=${rawContent.length}`
     );
 
-    // Collect text from all text blocks
-    const content = textBlocks
-      .map((b: unknown) => (b as { text: string }).text)
-      .filter((t: string) => t.length > 0)
-      .join("");
-
-    const finishReason = data.stop_reason;
+    const content = rawContent;
 
     if (!content) {
       lastError = new Error("Empty response from Tinker");
